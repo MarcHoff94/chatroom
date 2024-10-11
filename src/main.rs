@@ -1,5 +1,9 @@
 use std::{
-    collections::HashMap, io::{BufRead, BufReader, Write}, net::{TcpListener, TcpStream}, sync::{Arc, Mutex}, thread
+    collections::HashMap,
+    io::{BufRead, BufReader, Write},
+    net::{TcpListener, TcpStream},
+    sync::{Arc, Mutex},
+    thread,
 };
 
 fn main() -> std::io::Result<()> {
@@ -13,12 +17,11 @@ fn main() -> std::io::Result<()> {
         match stream {
             Ok(stream) => {
                 id += 1;
-                // Insert the new participant in the chatroom
+                
                 let chatroom_clone = Arc::clone(&chatroom);
                 let stream = Arc::new(Mutex::new(stream));
                 chatroom_clone.lock().unwrap().participants.insert(id, Arc::clone(&stream));
 
-                // Spawn a new thread for each client
                 thread::spawn(move || {
                     handle_client(chatroom_clone, stream, id);
                 });
@@ -81,9 +84,59 @@ impl Chatroom {
             }
         }
     }
-
+    fn add_participant(&mut self, id: u8, stream: Arc<Mutex<TcpStream>>) {
+        self.participants.insert(id, stream);
+        let msg = format!("Client {} has entered the chatroom", id);
+        self.broadcast_message(msg.as_bytes(), id);
+    }
     fn remove_participant(&mut self, id: u8) {
         self.participants.remove(&id);
         println!("Removed client {} from chatroom", id);
     }
+}
+
+struct Lobby {
+    logged_in: HashMap<u8, Arc<Mutex<TcpStream>>>,
+    logged_out: Vec<u8>,
+    chatrooms: HashMap<u8, Arc<Mutex<Chatroom>>>,
+    new_id: u8
+}
+impl Lobby {
+    fn new() -> Lobby {
+        Lobby { logged_in: HashMap::new(), logged_out: Vec::new(), chatrooms: HashMap::new(), new_id: 0 }
+    }
+    fn log_in(&mut self, id:u8, stream: Arc<Mutex<TcpStream>>) -> Result<(), &str> {
+        self.log_out(id).unwrap_or_else(|_| {});
+        self.logged_in.insert(id, stream);
+        Ok(())
+    }
+    fn log_out(&mut self, id: u8) -> Result<(), &str> {
+        if self.logged_out.contains(&id) {
+            let idx = self.logged_out.binary_search_by(|x| x.cmp(&id)).unwrap();
+            self.logged_out.remove(idx);
+        } else {
+            return Err("Id is not in logged_out vec")
+        }
+        Ok(())
+    }
+    fn enter_chatroom(&mut self,id: u8, id_cr: u8) -> Result<(), &str> {
+        let stream = Arc::clone(self.logged_in.get(&id).unwrap());
+        match self.chatrooms.get(&id_cr) {
+            Some(chatroom) =>  chatroom.lock().unwrap().add_participant(id, stream),
+            None => {}
+        }
+        Ok(())
+    }
+    fn leave_chatroom(&mut self, id: u8, id_cr: u8) -> Result<(), &str> {
+        Ok(())
+    }
+    fn create_chatroom(&mut self, participants: Vec<(u8, Arc<Mutex<TcpStream>>)>) {
+        let max_id = self.chatrooms.keys().max().unwrap()+1;
+        self.chatrooms.insert(max_id, Arc::new(Mutex::new(Chatroom::new(max_id))));
+        
+        for (id, stream) in participants {
+            self.chatrooms.get(&max_id).unwrap().lock().unwrap().add_participant(id, stream);
+        }
+    }
+
 }
