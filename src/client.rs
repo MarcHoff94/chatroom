@@ -4,8 +4,15 @@ use std::thread;
 use std::time::Duration;
 
 fn main() -> std::io::Result<()> {
-    let mut stream = TcpStream::connect("127.0.0.1:8080")?;
-    println!("Connected to server at 127.0.0.1:8080");
+    let stdin = io::stdin();
+    let mut ip = String::new();
+    println!("Enter IP to connect to: ");
+    stdin.read_line(&mut ip)?;
+
+    let trimmed_ip = ip.trim();
+
+    let mut stream = TcpStream::connect(trimmed_ip)?;
+    println!("Connected to server at {}", trimmed_ip); 
 
     
     stream.set_nonblocking(true)?;

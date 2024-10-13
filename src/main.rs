@@ -16,11 +16,12 @@ fn main() -> std::io::Result<()> {
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
+                //can overflow...!
                 id += 1;
                 
                 let chatroom_clone = Arc::clone(&chatroom);
                 let stream = Arc::new(Mutex::new(stream));
-                chatroom_clone.lock().unwrap().participants.insert(id, Arc::clone(&stream));
+                chatroom_clone.lock().unwrap().add_participant(id, Arc::clone(&stream));
 
                 thread::spawn(move || {
                     handle_client(chatroom_clone, stream, id);
@@ -32,7 +33,7 @@ fn main() -> std::io::Result<()> {
         }
     }
 
-    Ok(())
+    Ok(())  
 }
 
 fn handle_client(chatroom: Arc<Mutex<Chatroom>>, stream: Arc<Mutex<TcpStream>>, id: u8) {
@@ -91,7 +92,9 @@ impl Chatroom {
     }
     fn remove_participant(&mut self, id: u8) {
         self.participants.remove(&id);
-        println!("Removed client {} from chatroom", id);
+        let msg = format!("Removed client {} from chatroom", id);
+        self.broadcast_message(msg.as_bytes(), id);
+        println!("{}", msg);
     }
 }
 
@@ -123,15 +126,28 @@ impl Lobby {
         let stream = Arc::clone(self.logged_in.get(&id).unwrap());
         match self.chatrooms.get(&id_cr) {
             Some(chatroom) =>  chatroom.lock().unwrap().add_participant(id, stream),
-            None => {}
+            None => {
+                let mut participants: Vec<(u8, Arc<Mutex<TcpStream>>)> = Vec::new();
+                participants.push((id, stream));
+                self.create_chatroom(participants);
+                let new_chatroom_id = self.chatrooms.keys().max().unwrap();
+                let new_chatroom = self.chatrooms.get(new_chatroom_id).unwrap();
+                let msg = format!("New chatroom with id = {} was created", new_chatroom_id);
+                new_chatroom.lock().unwrap().broadcast_message(msg.as_bytes(), id);
+            }
         }
         Ok(())
     }
     fn leave_chatroom(&mut self, id: u8, id_cr: u8) -> Result<(), &str> {
+        self.chatrooms.get(&id_cr).unwrap().lock().unwrap().remove_participant(id);
         Ok(())
     }
     fn create_chatroom(&mut self, participants: Vec<(u8, Arc<Mutex<TcpStream>>)>) {
-        let max_id = self.chatrooms.keys().max().unwrap()+1;
+        //con overflow...!
+        let max_id = match self.chatrooms.keys().max() {
+            Some(x) => x + 1,
+            None => 0,
+        };
         self.chatrooms.insert(max_id, Arc::new(Mutex::new(Chatroom::new(max_id))));
         
         for (id, stream) in participants {
