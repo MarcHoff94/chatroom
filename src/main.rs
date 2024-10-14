@@ -3,11 +3,11 @@ use std::{
     io::{BufRead, BufReader, Write},
     net::{TcpListener, TcpStream},
     sync::{Arc, Mutex},
-    thread,
+    thread
 };
 
 fn main() -> std::io::Result<()> {
-    let listener = TcpListener::bind("127.0.0.1:8080")?;
+    let listener = TcpListener::bind("0.0.0.0:8080")?;
     println!("Server is running on 127.0.0.1:8080");
 
     let chatroom = Arc::new(Mutex::new(Chatroom::new(1)));
@@ -50,7 +50,7 @@ fn handle_client(chatroom: Arc<Mutex<Chatroom>>, stream: Arc<Mutex<TcpStream>>, 
             }
             Ok(_) => {
                 println!("Client {} sent: {}", id, buffer.trim());
-
+                
                 chatroom.lock().unwrap().broadcast_message(buffer.as_bytes(), id);
             }
             Err(e) => {

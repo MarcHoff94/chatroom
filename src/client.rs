@@ -5,27 +5,43 @@ use std::time::Duration;
 
 fn main() -> std::io::Result<()> {
     let stdin = io::stdin();
+
     let mut ip = String::new();
-    println!("Enter IP to connect to: ");
+
+    println!("Enter Chatserver IP to connect: ");
     stdin.read_line(&mut ip)?;
-
     let trimmed_ip = ip.trim();
-
     let mut stream = TcpStream::connect(trimmed_ip)?;
     println!("Connected to server at {}", trimmed_ip); 
 
-    
     stream.set_nonblocking(true)?;
 
-    
+    loop {
+        println!("Enter a username:");
+        let mut username = String::new();
+        stdin.read_line(&mut username)?;
+        if username.len() <= 16 {
+            println!("{}", username);
+            let trimmed_username = username.trim();
+
+            println!("Your username now is: {}", trimmed_username);
+            stream.write(trimmed_username.as_bytes());
+            break;
+        }
+        println!("Please choose a username with max. 16 letters")
+        
+    }
+
     let mut read_stream = stream.try_clone()?;
     thread::spawn(move || {
         let mut buffer = [0; 512]; 
         loop {
             match read_stream.read(&mut buffer) {
                 Ok(bytes_read) if bytes_read > 0 => {
-                    if let Ok(message) = String::from_utf8(buffer[..bytes_read].to_vec()) {
-                        println!("Received from server: {}", message.trim());
+                    if let Ok(mut received_msg) = String::from_utf8(buffer[..bytes_read].to_vec()) {
+                        let message = received_msg.split_off(9);
+                        let id_sender = received_msg.split_off(3);
+                        println!("{}: {}",id_sender, message.trim());
                     } else {
                         println!("Received non-UTF8 data from server");
                     }
@@ -61,3 +77,7 @@ fn main() -> std::io::Result<()> {
 
     Ok(())
 }
+
+
+
+
