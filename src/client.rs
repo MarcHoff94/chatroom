@@ -1,3 +1,4 @@
+use std::fmt::format;
 use std::io::{self, Read, Write};
 use std::net::TcpStream;
 use std::thread;
@@ -15,21 +16,21 @@ fn main() -> std::io::Result<()> {
     println!("Connected to server at {}", trimmed_ip); 
 
     stream.set_nonblocking(true)?;
-
+    let mut username = String::new();
     loop {
         println!("Enter a username:");
-        let mut username = String::new();
+        // let mut username = String::new();
         stdin.read_line(&mut username)?;
         if username.len() <= 16 {
-            println!("{}", username);
-            let trimmed_username = username.trim();
-
-            println!("Your username now is: {}", trimmed_username);
-            stream.write(trimmed_username.as_bytes());
-            break;
-        }
-        println!("Please choose a username with max. 16 letters")
-        
+            println!("Your username now is: {}", username);
+            match format_msg(MessageType::LOGIN, username.as_str().trim(), "I joined the chat!") {
+                Ok(msg) => {
+                    stream.write_all(msg.as_bytes());
+                    break;
+                }
+                Err(e) => println!("{}",e)
+            }
+        }        
     }
 
     let mut read_stream = stream.try_clone()?;
@@ -39,9 +40,7 @@ fn main() -> std::io::Result<()> {
             match read_stream.read(&mut buffer) {
                 Ok(bytes_read) if bytes_read > 0 => {
                     if let Ok(mut received_msg) = String::from_utf8(buffer[..bytes_read].to_vec()) {
-                        let message = received_msg.split_off(9);
-                        let id_sender = received_msg.split_off(3);
-                        println!("{}: {}",id_sender, message.trim());
+                        println!("{}", received_msg);
                     } else {
                         println!("Received non-UTF8 data from server");
                     }
@@ -61,23 +60,44 @@ fn main() -> std::io::Result<()> {
     
     let stdin = io::stdin();
     let mut input = String::new();
+    println!("Enter a message (type '/q' to exit): ");
     loop {
         input.clear();
-        println!("Enter a message (type '/q' to exit): ");
         stdin.read_line(&mut input)?;
 
-        let trimmed_input = input.trim();
+        let mut trimmed_input = input.trim();
         if trimmed_input == "/q" {
             break;
         }
 
-        // Send user input to the server
-        stream.write_all(format!("{}\n", trimmed_input).as_bytes())?;
+        let msg = format_msg(MessageType::CHATMESSAGE, username.as_str().trim(), trimmed_input).unwrap();
+
+        stream.write_all( msg.as_bytes())?;
     }
 
     Ok(())
 }
 
-
-
-
+pub enum MessageType {
+    LOGIN,
+    LOGOUT,
+    CHATMESSAGE,
+}
+pub fn format_msg<'a>(msgtype: MessageType, username: &'a str, content: &'a str) -> Result<String, &'a str> {
+    let mut msg = match msgtype {
+        MessageType::LOGIN => String::from("100;"),
+        MessageType::LOGOUT => String::from("101;"),
+        MessageType::CHATMESSAGE => String::from("200;"),
+    };
+    if username.len() > 16 {
+        return Err("Please choose a username with max. 16 letters") 
+    } else if username.contains(";") {
+        return Err("Illegal character \";\" was used")
+    }
+    msg.push_str(username);
+    msg.push_str(";");
+    msg.push_str(content);
+    msg.push_str("\n");
+    Ok(msg)
+    
+} 

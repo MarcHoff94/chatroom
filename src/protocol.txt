@@ -1,0 +1,1 @@
+User login: 100\username(max 16 letters)
