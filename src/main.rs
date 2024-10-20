@@ -51,7 +51,9 @@ fn handle_client(chatroom: Arc<Mutex<Chatroom>>, stream: Arc<Mutex<TcpStream>>) 
                 let content = String::from(raw_msg.next().unwrap_or_default().trim());
                 println!("Client {} sent: {}", username, content);
                 match msgtype {
-                    "100" => chatroom.lock().unwrap().add_participant(username, Arc::clone(&stream)),
+                    "100" =>  {
+                        chatroom.lock().unwrap().add_participant(username, Arc::clone(&stream))
+                    },
                     "200" => chatroom.lock().unwrap().broadcast_message(content,username),
                     _ => chatroom.lock().unwrap().broadcast_message(content,username)
                 }
